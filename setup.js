@@ -1,29 +1,31 @@
 require('./dbConnect');
-const paginate = require('express-paginate');
 const Restaurant = require('./restaurant');
 
 function setup(app) {
-	app.use(paginate.middleware(10, 100));
 
 	app.get('/restaurants', async (req, res) => {
-		const { limit, page = 1 } = req.query;
+		const limit = parseInt(req.query.limit);
+		const page = parseInt(req.query.page);
 		const skip = (page - 1) * limit;
-
+		console.log(limit, page, skip);
+		
 		const restaurants = await Restaurant.find().limit(limit).skip(skip);
 		const numberOfRestaurants = await Restaurant.count();
 
-		const pages = Math.ceil(numberOfRestaurants / limit);
-		res.status(200).json({
+		const result = {
 			data: restaurants,
-			next: paginate.hasNextPages(req)(pages)
-				? `/restaurants?page=${page + 1}&limit=${limit}`
-				: `/restaurants?page=1&limit=${limit}`,
-		});
+		};
+		const hasNextPage = Math.ceil(numberOfRestaurants / limit) > page;
+		if (hasNextPage) {
+			result.nextPage = `http://localhost:3000/restaurants?limit=${limit}&page=${page + 1}`;
+		}
+
+		res.status(200).json(result);
 	});
 
 	app.get('/restaurants/name/:name', async (req, res) => {
 		const name = req.params.name;
-		const restaurants = await Restaurant.find({ name });
+		const restaurants = await Restaurant.find({ name: name });
 		if (!restaurants || restaurants.length == 0) {
 			res.status(404).json();
 		} else {
@@ -52,11 +54,29 @@ function setup(app) {
 	});
 
 	app.put('/restaurant/:id', async (req, res) => {
+		const id = req.params.id;
 		const restaurantData = req.body;
-		const id = ''; //vir do body ou dos params
-		const rest = await Restaurant.findById(id);
-		rest.name = restaurantData.name;
-		rest.save();
+		
+		delete restaurantData._id;
+
+		const restaurant = await Restaurant.findById(id);
+		if (!restaurant) {
+			res.status(404).json({ message: 'Restaurante a ser atualizado não foi encontrado' });
+			return;
+		}
+
+		if (restaurantData.name != undefined) restaurant.name = restaurantData.name;
+		if (restaurantData.borough != undefined) restaurant.borough = restaurantData.borough;
+		if (restaurantData.cuisine != undefined) restaurant.cuisine = restaurantData.cuisine;
+		
+		// Object.keys(restaurantData).forEach(key => restaurant[key] = restaurantData[key]);
+
+		await restaurant.save().then(() => {
+			res.status(200).json(restaurant);
+		})
+		.catch(error => {
+			res.status(500).json({ status: 500, message: error.message });
+		})
 	});
 
 	app.delete('/restaurant/:id', async (req, res) => {
@@ -73,6 +93,7 @@ function setup(app) {
 				res.status(500).json({ status: 500, message: error.message });
 			});
 	});
+
 }
 
 module.exports = setup;
