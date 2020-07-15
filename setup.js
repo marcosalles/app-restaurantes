@@ -1,16 +1,27 @@
 require('./dbConnect');
 const Restaurant = require('./restaurant');
 
+function isAuthorized(req, res) {
+	const token = req.header('Token');
+	if (token != 'lasanha') {
+		res.status(401).json({ message: 'Acesso negado: token inválido' });
+		return false;
+	}
+	return true;
+}
+
 function setup(app) {
 
 	app.get('/restaurants', async (req, res) => {
+		if (!isAuthorized(req, res)) return;
+
 		const limit = parseInt(req.query.limit);
 		const page = parseInt(req.query.page);
 		const skip = (page - 1) * limit;
 		console.log(limit, page, skip);
 		
 		const restaurants = await Restaurant.find().limit(limit).skip(skip);
-		const numberOfRestaurants = await Restaurant.count();
+		const numberOfRestaurants = await Restaurant.countDocuments();
 
 		const result = {
 			data: restaurants,
@@ -24,6 +35,8 @@ function setup(app) {
 	});
 
 	app.get('/restaurants/name/:name', async (req, res) => {
+		if (!isAuthorized(req, res)) return;
+
 		const name = req.params.name;
 		const restaurants = await Restaurant.find({ name: name });
 		if (!restaurants || restaurants.length == 0) {
@@ -34,8 +47,10 @@ function setup(app) {
 	});
 
 	app.get('/restaurant/:id', async (req, res) => {
+		if (!isAuthorized(req, res)) return;
+
 		const id = req.params.id;
-		const restaurant = await Restaurant.findOne({ _id: id });
+		const restaurant = await Restaurant.findById(id);
 		if (!restaurant) {
 			res.status(404).json();
 		} else {
@@ -44,6 +59,8 @@ function setup(app) {
 	});
 
 	app.post('/restaurant', async (req, res) => {
+		if (!isAuthorized(req, res)) return;
+
 		const restaurant = new Restaurant(req.body);
 		await restaurant.save().then(() => {
 			res.status(200).json(restaurant);
@@ -54,6 +71,8 @@ function setup(app) {
 	});
 
 	app.put('/restaurant/:id', async (req, res) => {
+		if (!isAuthorized(req, res)) return;
+
 		const id = req.params.id;
 		const restaurantData = req.body;
 		
@@ -80,6 +99,8 @@ function setup(app) {
 	});
 
 	app.delete('/restaurant/:id', async (req, res) => {
+		if (!isAuthorized(req, res)) return;
+
 		const id = req.params.id;
 		await Restaurant.deleteOne({ _id: id })
 			.then((result) => {
