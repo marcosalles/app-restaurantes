@@ -28,5 +28,6 @@ restaurantSchema.statics.findByName = function(name) {
 }
 
 const Restaurant = mongoose.model('Restaurant', restaurantSchema);
+// restaurants
 
 module.exports = Restaurant;
