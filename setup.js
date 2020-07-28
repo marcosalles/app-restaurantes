@@ -15,8 +15,16 @@ async function isAuthorized(req, res) {
 
 function setup(app) {
 
+	app.get('/signup', (req, res) => {
+		res.status(200).json({usage: 'Send a POST with an \'email\' attribute in its body'});
+	});
+
 	app.post('/signup', async (req, res) => {
-		const email = req.body.email;
+		const email = (req.body || {}).email;
+		if (!email) {
+			res.status(400).json({usage: 'Send a body with an \'email\' attribute'});
+			return;
+		}
 		// finge que a gente validou que é um email
 
 		const user = await User.findOne({ email: email });
@@ -142,6 +150,17 @@ function setup(app) {
 			});
 	});
 
+	app.get('/', (req, res) => {
+		res.status(200).json({ allRoutes: {
+			'POST /signup': 'Send an email to get a token',
+			'GET /restaurants': 'Query all restaurants. Params: limit, page',
+			'GET /restaurants/name/:name': 'Query all restaurants by name.',
+			'GET /restaurant/:id': 'Query a restaurant by id.',
+			'POST /restaurant': 'Create a new restaurant.',
+			'PUT /restaurant/:id': 'Update a restaurant by id.',
+			'DELETE /restaurant/:id': 'Remove a restaurant by id.',
+		}})
+	});
 }
 
 module.exports = setup;
