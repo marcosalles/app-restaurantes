@@ -2,14 +2,16 @@ require('./dbConnect');
 const uuid = require('uuid');
 const Restaurant = require('./restaurant');
 const User = require('./usuario.modelo');
+const Log = require('./log');
 
-async function isAuthorized(req, res) {
+async function isAuthorized(req, res, url) {
 	const token = req.header('Token');
 	const user = await User.findOne({ token });
 	if (!user) {
 		res.status(401).json({ message: 'Acesso negado: token inválido' });
 		return false;
 	}
+	new Log({ userId: user._id, url, payload: req.body, date: new Date() }).save();
 	return true;
 }
 
@@ -49,10 +51,10 @@ function setup(app) {
 	});
 
 	app.get('/restaurants', async (req, res) => {
-		if (!await isAuthorized(req, res)) return;
-
+		if (!await isAuthorized(req, res, 'GET /restaurants')) return;
 		const limit = parseInt(req.query.limit);
 		const page = parseInt(req.query.page);
+
 		const skip = (page - 1) * limit;
 		
 		const restaurants = await Restaurant.find().limit(limit).skip(skip);
@@ -70,9 +72,9 @@ function setup(app) {
 	});
 
 	app.get('/restaurants/name/:name', async (req, res) => {
-		if (!await isAuthorized(req, res)) return;
-
 		const name = req.params.name;
+		if (!await isAuthorized(req, res, `GET /restaurants/name/${name}`)) return;
+
 		const restaurants = await Restaurant.find({ name: name });
 		if (!restaurants || restaurants.length == 0) {
 			res.status(404).json();
@@ -82,9 +84,9 @@ function setup(app) {
 	});
 
 	app.get('/restaurant/:id', async (req, res) => {
-		if (!await isAuthorized(req, res)) return;
-
 		const id = req.params.id;
+		if (!await isAuthorized(req, res, `GET /restaurant/${id}`)) return;
+
 		const restaurant = await Restaurant.findById(id);
 		if (!restaurant) {
 			res.status(404).json();
@@ -94,10 +96,10 @@ function setup(app) {
 	});
 
 	app.post('/restaurant', async (req, res) => {
-		if (!await isAuthorized(req, res)) return;
+		if (!await isAuthorized(req, res, 'POST /restaurant')) return;
 
 		const restaurant = new Restaurant(req.body);
-		await restaurant.save().then(() => {
+		restaurant.save().then(() => {
 			res.status(200).json(restaurant);
 		})
 		.catch(error => {
@@ -106,9 +108,9 @@ function setup(app) {
 	});
 
 	app.put('/restaurant/:id', async (req, res) => {
-		if (!await isAuthorized(req, res)) return;
-
 		const id = req.params.id;
+		if (!await isAuthorized(req, res, `PUT /restaurant/${id}`)) return;
+
 		const restaurantData = req.body;
 		
 		delete restaurantData._id;
@@ -119,13 +121,9 @@ function setup(app) {
 			return;
 		}
 
-		if (restaurantData.name != undefined) restaurant.name = restaurantData.name;
-		if (restaurantData.borough != undefined) restaurant.borough = restaurantData.borough;
-		if (restaurantData.cuisine != undefined) restaurant.cuisine = restaurantData.cuisine;
-		
-		// Object.keys(restaurantData).forEach(key => restaurant[key] = restaurantData[key]);
+		Object.keys(restaurantData).forEach(key => restaurant[key] = restaurantData[key]);
 
-		await restaurant.save().then(() => {
+		restaurant.save().then(() => {
 			res.status(200).json(restaurant);
 		})
 		.catch(error => {
@@ -134,9 +132,9 @@ function setup(app) {
 	});
 
 	app.delete('/restaurant/:id', async (req, res) => {
-		if (!await isAuthorized(req, res)) return;
-
 		const id = req.params.id;
+		if (!await isAuthorized(req, res, `DELETE /restaurant/${id}`)) return;
+
 		await Restaurant.deleteOne({ _id: id })
 			.then((result) => {
 				if (result.deletedCount > 0) {
@@ -151,15 +149,21 @@ function setup(app) {
 	});
 
 	app.get('/', (req, res) => {
-		res.status(200).json({ allRoutes: {
-			'POST /signup': 'Send an email to get a token',
-			'GET /restaurants': 'Query all restaurants. Params: limit, page',
-			'GET /restaurants/name/:name': 'Query all restaurants by name.',
-			'GET /restaurant/:id': 'Query a restaurant by id.',
-			'POST /restaurant': 'Create a new restaurant.',
-			'PUT /restaurant/:id': 'Update a restaurant by id.',
-			'DELETE /restaurant/:id': 'Remove a restaurant by id.',
-		}})
+		res.status(200).json({
+			openRoutes: {
+				'GET    /signup': 'Instructions on how to signup.',
+				'POST   /signup': 'Send an email to get a token.',
+			},
+			closedRoutes: {
+				'GET    /restaurants': 'Query all restaurants. Params: limit, page.',
+				'GET    /restaurants/name/:name': 'Query all restaurants by name.',
+				'GET    /restaurant/:id': 'Query a restaurant by id.',
+				'POST   /restaurant': 'Create a new restaurant.',
+				'PUT    /restaurant/:id': 'Update a restaurant by id.',
+				'DELETE /restaurant/:id': 'Remove a restaurant by id.',
+			},
+			access: 'To access the closed routes, you must provide a Header named \'Token\' with your own token as its value',
+		})
 	});
 }
 
